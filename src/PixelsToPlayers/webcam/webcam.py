@@ -14,6 +14,7 @@ FPS = 30
 # -- Video save settings --#
 CURR_DIR = os.path.dirname(__file__)
 VIDEO_SAVE_PATH = os.path.join(CURR_DIR, "recordings")
+os.makedirs(VIDEO_SAVE_PATH, exist_ok=True)
 
 
 def initialize_webcam():
@@ -74,3 +75,7 @@ def record_video(cap, duration=10):
 
     print(f"Video saved to {filename}")
     return filename
+
+if __name__ == "__main__":
+    cap = initialize_webcam()
+    record_video(cap, 5)
