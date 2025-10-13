@@ -17,7 +17,7 @@ VIDEO_SAVE_PATH = os.path.join(CURR_DIR, "recordings")
 
 
 def initialize_webcam():
-    """Initializing webcam (video capture) object and returing it"""
+    """Initializing webcam (video capture) object and returning it"""
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
