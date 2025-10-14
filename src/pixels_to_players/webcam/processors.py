@@ -18,7 +18,7 @@ _face_mesh = mp_face_mesh.FaceMesh(
 )
 
 class FaceMeshLogger:
-    def __init__(self, output_dir=Path("recordings")):
+    def __init__(self, output_dir=Path(__file__).parent / "recordings"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.start_time = time.time()
@@ -44,13 +44,6 @@ class FaceMeshLogger:
                 })
 
                 # draw iris model 
-                mp_drawing.draw_landmarks(
-                image=frame,
-                landmark_list=face_landmarks,
-                connections=mp_face_mesh.FACEMESH_CONTOURS,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style(),
-                )
                 mp_drawing.draw_landmarks(
                     image=frame,
                     landmark_list=face_landmarks,
