@@ -3,8 +3,8 @@ import cv2
 import time
 import json
 import numpy as np
-from webcam.client import WebcamClient
-from webcam.processors import get_iris_center
+from pixels_to_players.webcam.client import WebcamClient
+from pixels_to_players.webcam.processors import get_iris_center
 
 # Normalized calibration points (x, y)
 CALIB_POINTS = [
@@ -66,5 +66,4 @@ def run_calibration(duration_per_point=2.0, output_file="calibration_data.json")
 
 if __name__ == "__main__":
     run_calibration()
-
 
