@@ -2,29 +2,22 @@
 # handles url and calls other functions to start the main logic
 
 import sys
-import os
-import json
 import urllib.parse
-from pathlib import Path
 from datetime import datetime
 
-APP_NAME = "PixelsToPlayers"
+from pixels_to_players.webcam import WebcamClient, WebcamConfig, processors as P
+from pixels_to_players.file_operations import FileManager, Logger
+from firebase import FirebaseClient
+
 PROTOCOL = "PixelsToPlayers"
 
-def log_event(data: dict):
-    try:
-        log_dir = Path(os.getenv("LOCALAPPDATA", ".")) / APP_NAME
-        log_dir.mkdir(parents=True, exist_ok=True)
-        (log_dir / "last_invocation.json").write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-    except Exception:
-        pass
 
-def handle(path : str, qs : dict):
-    # TODO: main logic, i.e. showing window for recording and running background processes here
+def handle(path: str, qs: dict):
+    # TODO: main logic, i.e. showing window for recording and running background processes here.
+    # webpage should send the current user session to the client somehow
 
     pass
+
 
 def main():
     # Only act if we were launched with a URL-like first arg
@@ -60,7 +53,7 @@ def main():
         error = repr(e)
 
     # Minimal diagnostic log (useful for --windowed builds)
-    log_event({
+    Logger.log_event({
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "url": url,
         "scheme": parsed.scheme,
@@ -79,6 +72,7 @@ def main():
             print(result or "")
 
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

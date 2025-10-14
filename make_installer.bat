@@ -1,1 +1,1 @@
-py make_msi.py --exe dist\PixelsToPlayers\PixelsToPlayers.exe --name "MyApp" --version 1.2.3 --protocol PixelsToPlayers --out PixelsToPlayers-Setup.msi
+py make_msi.py --exe dist\pixels-to-players\PixelsToPlayers.exe --name "MyApp" --version 1.2.3 --protocol PixelsToPlayers --out PixelsToPlayers-Setup.msi
