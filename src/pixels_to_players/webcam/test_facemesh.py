@@ -1,5 +1,5 @@
-from webcam.client import WebcamClient
-from webcam.processors import flip_horizontal, FaceMeshLogger
+from pixels_to_players.webcam.client import WebcamClient
+from pixels_to_players.webcam.processors import flip_horizontal, FaceMeshLogger
 
 logger = FaceMeshLogger()
 
