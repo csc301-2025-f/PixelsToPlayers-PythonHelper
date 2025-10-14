@@ -5,4 +5,4 @@ py -m PyInstaller ^
   --onedir ^
   --name PixelsToPlayers ^
   --icon resources\favicon.ico ^
-  src\pixels-to-players\app.py
+  src\pixels_to_players\app.py
