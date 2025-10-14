@@ -9,7 +9,7 @@ Create a poetry venv running Python 3.10, [PyCharm tutorial](https://www.jetbrai
 Run `poetry install` to install dependencies.
 
 ### Build
-Run `make_app.bat` then `make_msi.bat`
+Run `make_app.bat` then `make_installer.bat`
 
 `.msi` installer registers the url `PixelsToPlayers://` to `HKCU/Software/Classes/PixelsToPlayers`
 
