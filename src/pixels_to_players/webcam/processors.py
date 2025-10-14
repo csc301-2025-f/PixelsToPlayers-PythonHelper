@@ -1,6 +1,8 @@
 # src/pixels_to_players/webcam/processors.py
 from __future__ import annotations
-import cv2
+from pathlib import Path
+from datetime import datetime
+import cv2, time, json
 import mediapipe as mp
 import numpy as np
 
@@ -15,37 +17,57 @@ _face_mesh = mp_face_mesh.FaceMesh(
     min_tracking_confidence=0.5,
 )
 
-# Keep these pure and fast; easy to unit-test and compose.
+class FaceMeshLogger:
+    def __init__(self, output_dir=Path("recordings")):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.start_time = time.time()
+        self.data = []
 
-def draw_facemesh(frame):
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = _face_mesh.process(rgb)
+    def __call__(self, frame):
+        # reset time in case time diff between instantiation and recording
+        if not hasattr(self, "start_time") or self.start_time is None:
+            self.start_time = time.time()
 
-    if results.multi_face_landmarks:
-        for face_landmarks in results.multi_face_landmarks:
-            mp_drawing.draw_landmarks(
-                image=frame,
-                landmark_list=face_landmarks,
-                connections=mp_face_mesh.FACEMESH_TESSELATION,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style(),
-            )
-            mp_drawing.draw_landmarks(
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = _face_mesh.process(rgb)
+
+        if results.multi_face_landmarks:
+            h, w, _ = frame.shape
+            for face_landmarks in results.multi_face_landmarks:
+                iris_left = face_landmarks.landmark[474]
+                iris_right = face_landmarks.landmark[469]
+                self.data.append({
+                    "timestamp": round(time.time() - self.start_time, 3),
+                    "left_iris": [iris_left.x * w, iris_left.y * h],
+                    "right_iris": [iris_right.x * w, iris_right.y * h],
+                })
+
+                # draw iris model 
+                mp_drawing.draw_landmarks(
                 image=frame,
                 landmark_list=face_landmarks,
                 connections=mp_face_mesh.FACEMESH_CONTOURS,
                 landmark_drawing_spec=None,
                 connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style(),
-            )
-            mp_drawing.draw_landmarks(
-                image=frame,
-                landmark_list=face_landmarks,
-                connections=mp_face_mesh.FACEMESH_IRISES,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style(),
-            )
+                )
+                mp_drawing.draw_landmarks(
+                    image=frame,
+                    landmark_list=face_landmarks,
+                    connections=mp_face_mesh.FACEMESH_IRISES,
+                    landmark_drawing_spec=None,
+                    connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style(),
+                )
 
-    return frame
+        return frame
+
+    def save(self):
+        filename = self.output_dir / f"iris_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, "w") as f:
+            json.dump(self.data, f, indent=2)
+        print(f"Saved iris log: {filename}")
+
+# Keep these pure and fast; easy to unit-test and compose.
 
 def flip_horizontal(frame: np.ndarray) -> np.ndarray:
     """Mirror the frame (selfie style)."""
