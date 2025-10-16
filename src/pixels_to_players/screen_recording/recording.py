@@ -55,7 +55,7 @@ class ScreenRecordingConfig:
         fps (int): Target frame rate for the recording. Default is 15 FPS.
         show_preview (bool): Whether to show a live preview window during recording.
         save_dir (Path): Directory where recorded videos will be saved.
-        fourcc (str): Video codec to use for encoding. Default is 'mp4v' for MP4 format.
+        fourcc (str): Video codec to use for encoding. Default is 'avc1' for MP4 (H.264) format.
         enable_key_stop (bool): Whether to allow stopping recording with ESC or 'q' keys.
             Disabled by default for gaming scenarios. Defaults to False.
     
@@ -88,7 +88,7 @@ class ScreenRecordingConfig:
     fps: int = 15                # target frame rate
     show_preview: bool = False   # show live preview window
     save_dir: Path = Path(__file__).parent / "recordings"
-    fourcc: str = "mp4v"         # video codec
+    fourcc: str = "avc1"         # video codec
     enable_key_stop: bool = False # allow stopping with ESC or 'q' keys
 
 
@@ -140,7 +140,7 @@ class ScreenRecorder:
         self._running: bool = False
         self._frame_index: int = 0
         self.video_path: Optional[Path] = None
-        self._window_name = "screen"
+        self._window_name = "Screen Recording Preview"
 
     def start(self) -> Path:
         """
@@ -165,14 +165,43 @@ class ScreenRecorder:
         screen_w, screen_h = pyautogui.size()
         w = self.cfg.width or screen_w
         h = self.cfg.height or screen_h
+        
+        # Use a smaller, more standard resolution for better compatibility
+        if w > 1280:
+            w = 1280
+        if h > 720:
+            h = 720
+            
+        # Ensure dimensions are even numbers (required by some codecs)
+        w = w - (w % 2)
+        h = h - (h % 2)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.video_path = self.cfg.save_dir / f"screen_{ts}.mp4"
 
-        fourcc = cv2.VideoWriter_fourcc(*self.cfg.fourcc)
-        self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h))
+        # Try different codec approaches
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*self.cfg.fourcc)
+            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h), True)
+        except:
+            # Fallback to a more basic approach
+            print("Primary codec failed, trying fallback...")
+            fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h), True)
         if not self._writer.isOpened():
             raise RuntimeError(f"Failed to open video writer: {self.video_path}")
+        
+        print(f"Video writer initialized: {self.video_path}")
+        print(f"Codec: {self.cfg.fourcc}, FPS: {self.cfg.fps}, Size: {w}x{h}")
+
+        # Store target size to enforce consistent frame dimensions
+        self._target_size = (w, h)
+        
+        # Test write a dummy frame to verify the writer works
+        import numpy as np
+        test_frame = np.zeros((h, w, 3), dtype=np.uint8)
+        self._writer.write(test_frame)
+        print("Test frame write attempted")
 
         self._running = True
         self._frame_index = 0
@@ -212,6 +241,7 @@ class ScreenRecorder:
             self.start()
 
         assert self._writer is not None
+        target_w, target_h = getattr(self, "_target_size", (None, None))
 
         frame_interval = 1.0 / max(1, self.cfg.fps)
         next_frame_time = time.monotonic()
@@ -231,18 +261,28 @@ class ScreenRecorder:
                 # capture screenshot (RGB)
                 screenshot = pyautogui.screenshot()
                 frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+                
+                # Ensure frame is the right size and format
+                # Note: We'll resize later if needed based on config
 
-                # resize if requested
-                if self.cfg.width or self.cfg.height:
-                    target_w = self.cfg.width or frame.shape[1]
-                    target_h = self.cfg.height or frame.shape[0]
-                    frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                # Enforce exact frame size for VideoWriter
+                if target_w is not None and target_h is not None:
+                    src_h, src_w = frame.shape[0], frame.shape[1]
+                    if (src_w, src_h) != (target_w, target_h):
+                        frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
-                # write frame
+                # write frame to video
                 self._writer.write(frame)
+                if self._frame_index % 10 == 0:  # Print every 10th frame
+                    print(f"Wrote frame {self._frame_index}")
 
+                # show preview after writing to avoid capturing the preview window
                 if self.cfg.show_preview:
-                    cv2.imshow(self._window_name, frame)
+                    # Create a smaller preview to avoid interfering with screen capture
+                    preview_frame = cv2.resize(frame, (640, 360))
+                    cv2.imshow(self._window_name, preview_frame)
+                    # Position the window in top-right corner to minimize interference
+                    cv2.moveWindow(self._window_name, 100, 100)
                     if self.cfg.enable_key_stop:
                         key = cv2.waitKey(1) & 0xFF
                         if key in (27, ord('q')):
@@ -279,8 +319,24 @@ class ScreenRecorder:
         self._running = False
 
         if self._writer is not None:
+            # Ensure all frames are written
             self._writer.release()
             self._writer = None
+            print(f"Video writer released. Final file: {self.video_path}")
+            if self.video_path and self.video_path.exists():
+                file_size = self.video_path.stat().st_size
+                print(f"Final file size: {file_size} bytes")
+                
+                # Try to verify the video can be opened
+                import cv2
+                test_cap = cv2.VideoCapture(str(self.video_path))
+                if test_cap.isOpened():
+                    frame_count = int(test_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    fps = test_cap.get(cv2.CAP_PROP_FPS)
+                    print(f"Video verification: {frame_count} frames at {fps} FPS")
+                    test_cap.release()
+                else:
+                    print("WARNING: Video file cannot be opened for verification")
 
         if self.cfg.show_preview:
             cv2.destroyWindow(self._window_name)
