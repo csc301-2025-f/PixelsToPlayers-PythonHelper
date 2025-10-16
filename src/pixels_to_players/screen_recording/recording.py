@@ -25,9 +25,6 @@ Dependencies:
     - pyautogui: For screen capture functionality
     - opencv-python: For video encoding and processing
     - numpy: For array operations on captured frames
-
-Author: PixelsToPlayers Team
-Version: 1.0.0
 """
 
 from __future__ import annotations
@@ -59,6 +56,8 @@ class ScreenRecordingConfig:
         show_preview (bool): Whether to show a live preview window during recording.
         save_dir (Path): Directory where recorded videos will be saved.
         fourcc (str): Video codec to use for encoding. Default is 'mp4v' for MP4 format.
+        enable_key_stop (bool): Whether to allow stopping recording with ESC or 'q' keys.
+            Disabled by default for gaming scenarios. Defaults to False.
     
     Example:
         # High quality recording with preview
@@ -77,6 +76,12 @@ class ScreenRecordingConfig:
             fps=10,
             show_preview=False
         )
+        
+        # Gaming-friendly recording (no key stops)
+        config = ScreenRecordingConfig(
+            show_preview=True,
+            enable_key_stop=False  # Won't stop on ESC or 'q'
+        )
     """
     width: Optional[int] = None  # None → use full screen width
     height: Optional[int] = None # None → use full screen height
@@ -84,6 +89,7 @@ class ScreenRecordingConfig:
     show_preview: bool = False   # show live preview window
     save_dir: Path = Path(__file__).parent / "recordings"
     fourcc: str = "mp4v"         # video codec
+    enable_key_stop: bool = False # allow stopping with ESC or 'q' keys
 
 
 class ScreenRecorder:
@@ -186,12 +192,13 @@ class ScreenRecorder:
         
         Args:
             duration_seconds (Optional[float]): Duration to record in seconds.
-                If None, records indefinitely until stop() is called or 'q' is pressed.
+                If None, records indefinitely until stop() is called or key stop is triggered
+                (only if enable_key_stop is True in config).
                 Defaults to None.
         
         Raises:
             RuntimeError: If the video writer is not properly initialized.
-            KeyboardInterrupt: If recording is interrupted by user (ESC or 'q' key).
+            KeyboardInterrupt: If recording is interrupted by user (ESC or 'q' key, only if enable_key_stop is True).
         
         Example:
             # Record for 10 seconds
@@ -236,9 +243,12 @@ class ScreenRecorder:
 
                 if self.cfg.show_preview:
                     cv2.imshow(self._window_name, frame)
-                    key = cv2.waitKey(1) & 0xFF
-                    if key in (27, ord('q')):
-                        break
+                    if self.cfg.enable_key_stop:
+                        key = cv2.waitKey(1) & 0xFF
+                        if key in (27, ord('q')):
+                            break
+                    else:
+                        cv2.waitKey(1)  # Still need to process window events
 
                 self._frame_index += 1
                 next_frame_time += frame_interval
