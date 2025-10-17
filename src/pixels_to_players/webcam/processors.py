@@ -6,51 +6,68 @@ import cv2, time, json
 import mediapipe as mp
 import numpy as np
 
-mp_face_mesh = mp.solutions.face_mesh
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-
-_face_mesh = mp_face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
-
 class FaceMeshLogger:
-    def __init__(self, output_dir=Path(__file__).parent / "recordings"):
+    """ 
+    Processor that runs Mediapipe FaceMesh with iris tracking on webcam frames and logs iris coordinates (x, y, timestamp)
+    """
+    def __init__(self, output_dir=Path(__file__).parent / "recordings", skip:int=1):
+        """
+        output_dir (Path): Directory to save iris tracking data.
+        skip (int): Process every Nth frame (default=1 means every frame).
+        """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.start_time = time.time()
+        self.start_time = None
         self.data = []
+        self.frame_count = 0
+        self.skip = skip
+
+        self.face_mesh = mp.solutions.face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
 
     def __call__(self, frame):
-        # reset time in case time diff between instantiation and recording
-        if not hasattr(self, "start_time") or self.start_time is None:
-            self.start_time = time.time()
+        try:
+            if frame is None or frame.size == 0:
+                print("[Warning] Empty frame received, skipping...")
+                return frame
+            
+            # skip some frames for performance
+            self.frame_count += 1
+            if self.frame_count % self.skip != 0:
+                return frame
+            
+            # reset time in case time diff between instantiation and recording
+            if not hasattr(self, "start_time") or self.start_time is None:
+                self.start_time = time.time()
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = _face_mesh.process(rgb)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(rgb)
 
-        if results.multi_face_landmarks:
-            h, w, _ = frame.shape
-            for face_landmarks in results.multi_face_landmarks:
-                iris_left = face_landmarks.landmark[474]
-                iris_right = face_landmarks.landmark[469]
-                self.data.append({
-                    "timestamp": round(time.time() - self.start_time, 3),
-                    "left_iris": [iris_left.x * w, iris_left.y * h],
-                    "right_iris": [iris_right.x * w, iris_right.y * h],
-                })
+            if results.multi_face_landmarks:
+                h, w, _ = frame.shape
+                for face_landmarks in results.multi_face_landmarks:
+                    iris_left = face_landmarks.landmark[474]
+                    iris_right = face_landmarks.landmark[469]
+                    self.data.append({
+                        "timestamp": round(time.time() - self.start_time, 3),
+                        "left_iris": [iris_left.x * w, iris_left.y * h],
+                        "right_iris": [iris_right.x * w, iris_right.y * h],
+                    })
 
-                # draw iris model 
-                mp_drawing.draw_landmarks(
-                    image=frame,
-                    landmark_list=face_landmarks,
-                    connections=mp_face_mesh.FACEMESH_IRISES,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style(),
-                )
+                    # draw iris model 
+                    mp.solutions.drawing_utils.draw_landmarks(
+                        image=frame,
+                        landmark_list=face_landmarks,
+                        connections=mp.solutions.face_mesh.FACEMESH_IRISES,
+                        landmark_drawing_spec=None,
+                        connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_iris_connections_style(),
+                    )
+        except Exception as e:
+            print(f"[Error] FaceMeshLogger failed on frame {self.frame_count}: {e}")
 
         return frame
 
