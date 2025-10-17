@@ -198,7 +198,6 @@ class ScreenRecorder:
         self._target_size = (w, h)
         
         # Test write a dummy frame to verify the writer works
-        import numpy as np
         test_frame = np.zeros((h, w, 3), dtype=np.uint8)
         self._writer.write(test_frame)
         print("Test frame write attempted")
@@ -328,7 +327,6 @@ class ScreenRecorder:
                 print(f"Final file size: {file_size} bytes")
                 
                 # Try to verify the video can be opened
-                import cv2
                 test_cap = cv2.VideoCapture(str(self.video_path))
                 if test_cap.isOpened():
                     frame_count = int(test_cap.get(cv2.CAP_PROP_FRAME_COUNT))
