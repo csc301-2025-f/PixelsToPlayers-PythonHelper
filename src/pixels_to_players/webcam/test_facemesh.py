@@ -1,5 +1,5 @@
-from pixels_to_players.webcam.client import WebcamClient
-from pixels_to_players.webcam.processors import draw_facemesh, flip_horizontal
+from .client import WebcamClient
+from .processors import draw_facemesh, flip_horizontal
 
 
 with WebcamClient() as cam:
