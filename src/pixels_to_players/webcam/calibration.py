@@ -18,7 +18,7 @@ CALIB_POINTS = [
     (0.5, 0.5)
 ]
 
-def show_dot(frame: np.ndarray, screen_width: int, screen_height: int, normalized_x: float, normalized_y: float) -> None:
+def show_dot(frame: np.ndarray, screen_width: int, screen_height: int, normalized_x: float, normalized_y: float) -> np.ndarray:
     """Draw a red calibration dot on the frame."""
     x = int(normalized_x * screen_width)
     y = int(normalized_y * screen_height)
