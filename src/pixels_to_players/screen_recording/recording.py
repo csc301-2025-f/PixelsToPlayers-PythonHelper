@@ -191,10 +191,13 @@ class ScreenRecorder:
         w -= w % 2
         h -= h & 2
 
+        self._target_size = w, h
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.video_path = self.cfg.save_dir / f"screen_{ts}.mp4"
 
-        # Try different codec approaches
+
+    # Try different codec approaches
         try:
             fourcc = cv2.VideoWriter.fourcc(*self.cfg.fourcc)
             os_version: Optional[tuple[str, int]] = get_os_version()
@@ -205,9 +208,9 @@ class ScreenRecorder:
             print('OS version:', os_version[0], os_version[1])
             if os_version[0] == "windows" and os_version[1] >= 7:  # MSMF supports H.264
                 print("windows >= 7, using MSMF")
-                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_MSMF, fourcc, self.cfg.fps, (w, h))
+                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_MSMF, fourcc, self.cfg.fps, self._target_size)
             else:
-                self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h))
+                self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, self._target_size)
 
         except Exception as e:
             # Fallback to a more basic approach
@@ -215,18 +218,15 @@ class ScreenRecorder:
             print("Primary codec failed, trying fallback...")
             fourcc = cv2.VideoWriter.fourcc(*'MJPG')
             print(f"Using codec: {fourcc}")
-            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h), True)
+            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, self._target_size)
         if not self._writer.isOpened():
             raise RuntimeError(f"Failed to open video writer: {self.video_path}")
 
         print(f"Video writer initialized: {self.video_path}")
-        print(f"Codec: {self.cfg.fourcc}, FPS: {self.cfg.fps}, Size: {w}x{h}")
-
-        # Store target size to enforce consistent frame dimensions
-        self._target_size = (w, h)
+        print(f"Codec: {self.cfg.fourcc}, FPS: {self.cfg.fps}, Size: {self._target_size[0]}x{self._target_size[1]}")
 
         # Test write a dummy frame to verify the writer works
-        test_frame = np.zeros((h, w, 3), dtype=np.uint8)
+        test_frame = np.zeros((self._target_size[1], self._target_size[0], 3), dtype=np.uint8) # height then width
         self._writer.write(test_frame)
         print("Test frame write attempted")
 
