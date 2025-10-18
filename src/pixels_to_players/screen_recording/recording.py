@@ -46,45 +46,34 @@ from pixels_to_players.utils.os_version import *
 @dataclass
 class ScreenRecordingConfig:
     """
-    Configuration class for screen recording parameters.
-    
-    This dataclass holds all the configuration options needed to customize
-    the screen recording behavior, including resolution, frame rate, and
-    output settings.
-    
+    Configuration for screen recording.
+
+    Controls capture resolution, frame rate, preview window, codec, and output location.
+
     Attributes:
-        width (Optional[int]): Target video width in pixels. If None, uses full screen width.
-        height (Optional[int]): Target video height in pixels. If None, uses full screen height.
-        fps (int): Target frame rate for the recording. Default is 15 FPS.
-        show_preview (bool): Whether to show a live preview window during recording.
-        save_dir (Path): Directory where recorded videos will be saved.
-        fourcc (str): Video codec to use for encoding. Default is 'avc1' for MP4 (H.264) format.
-        enable_key_stop (bool): Whether to allow stopping recording with ESC or 'q' keys.
-            Disabled by default for gaming scenarios. Defaults to False.
-    
-    Example:
-        # High quality recording with preview
-        config = ScreenRecordingConfig(
-            width=1920,
-            height=1080,
-            fps=30,
-            show_preview=True,
-            fourcc="mp4v"
-        )
-        
-        # Low quality recording without preview
-        config = ScreenRecordingConfig(
-            width=640,
-            height=480,
-            fps=10,
-            show_preview=False
-        )
-        
-        # Gaming-friendly recording (no key stops)
-        config = ScreenRecordingConfig(
-            show_preview=True,
-            enable_key_stop=False  # Won't stop on ESC or 'q'
-        )
+        res (Optional[Size]): Desired capture resolution (width, height). If None, uses the
+            primary display size. Final resolution is capped by MAX_RES and forced to even
+            dimensions for codec compatibility.
+        MAX_RES (Size): Upper bound for the output resolution. Defaults to (1280, 720).
+        fps (int): Target frames per second for capture and encoding. Default: 15.
+        show_preview (bool): If True, shows a small live preview window during recording.
+            Note: The preview processes UI events via cv2.waitKey to keep the window responsive.
+        save_dir (Path): Directory where output videos are saved. Created if missing.
+        fourcc (str): FourCC codec string (e.g., 'H264', 'mp4v', 'MJPG'). Default: 'H264'.
+            The recorder attempts platform-specific backends (MSMF on Windows, AVFoundation on macOS)
+            for H.264 when available, with an internal fallback if initialization fails.
+        enable_key_stop (bool): If True, allows stopping with ESC or 'q' when preview is enabled.
+            Default: False (use programmatic stop for uninterrupted sessions).
+
+    Examples:
+        # High quality previewed recording (attempt H.264)
+        config = ScreenRecordingConfig(res=(1920, 1080), fps=30, show_preview=True, fourcc="H264")
+
+        # Lightweight recording without preview (resolution capped by MAX_RES)
+        config = ScreenRecordingConfig(fps=10, show_preview=False)
+
+        # Gaming-friendly: preview on, but no accidental key-stop
+        config = ScreenRecordingConfig(show_preview=True, enable_key_stop=False)
     """
     res: Optional[Size] = None
     MAX_RES: Size = (1280, 720)
@@ -99,35 +88,35 @@ class ScreenRecordingConfig:
 
 class ScreenRecorder:
     """
-    Main class for recording screen content to video files.
-    
-    The ScreenRecorder class provides a simple interface for capturing screen
-    content and saving it as a video file. It supports configurable resolution,
-    frame rate, and output format.
-    
-    The recorder uses pyautogui for screen capture and OpenCV for video encoding,
-    providing a cross-platform solution for screen recording functionality.
-    
+    Records the screen to a video file.
+
+    Features:
+    - Auto-detects screen size (or uses config.res), caps to MAX_RES, and enforces even dimensions.
+    - Attempts H.264 via platform-native backends (MSMF on Windows, AVFoundation on macOS),
+      with a safe fallback to a broadly supported codec if initialization fails.
+    - Time-based pacing to approximate the target FPS.
+    - Optional live preview window with optional key-based stop.
+
     Attributes:
-        cfg (ScreenRecordingConfig): Configuration object containing recording parameters.
-        _writer (Optional[cv2.VideoWriter]): OpenCV video writer instance.
-        _running (bool): Flag indicating if recording is currently active.
-        _frame_index (int): Current frame number being recorded.
-        video_path (Optional[Path]): Path to the output video file.
-        _window_name (str): Name of the preview window (if enabled).
-    
-    Example:
-        # Basic usage
+        cfg (ScreenRecordingConfig): Recording configuration.
+        video_path (Optional[Path]): Output video path after start().
+        _writer (Optional[cv2.VideoWriter]): Internal OpenCV writer.
+        _running (bool): Recording loop state.
+        _frame_index (int): Number of frames written in the current session.
+        _window_name (str): Preview window title.
+        _target_size (Size): Effective WxH used for encoding.
+
+    Typical usage:
+        # One-shot, 10 seconds
         recorder = ScreenRecorder()
-        video_path = recorder.record(duration_seconds=10.0)
-        
-        # Advanced usage with manual control
-        recorder = ScreenRecorder(ScreenRecordingConfig(fps=30, show_preview=True))
-        video_path = recorder.start()
+        path = recorder.record(duration_seconds=10.0)
+
+        # Manual control with custom config
+        recorder = ScreenRecorder(ScreenRecordingConfig(fps=30, show_preview=True, fourcc="H264"))
+        path = recorder.start()
         recorder.record_for(duration_seconds=5.0)
         recorder.stop()
     """
-
     cfg: Optional[ScreenRecordingConfig]
     _writer: Optional[cv2.VideoWriter]
     _running: bool
