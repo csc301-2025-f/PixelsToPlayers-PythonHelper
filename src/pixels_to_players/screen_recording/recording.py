@@ -40,7 +40,7 @@ import numpy as np
 import pyautogui
 from cv2.typing import Size
 
-from pixels_to_players.utils.os_version import get_os_version
+from pixels_to_players.utils.os_version import *
 
 
 @dataclass
@@ -92,7 +92,7 @@ class ScreenRecordingConfig:
     fps: int = 15  # target frame rate
     show_preview: bool = False  # show live preview window
     save_dir: Path = Path(__file__).parent / "recordings"
-    fourcc: str = 'H264' # video codec H.264
+    fourcc: str = 'H264'  # video codec H.264
     enable_key_stop: bool = False  # allow stopping with ESC or 'q' keys
     _target_size: Size = None, None
 
@@ -196,19 +196,24 @@ class ScreenRecorder:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.video_path = self.cfg.save_dir / f"screen_{ts}.mp4"
 
-
-    # Try different codec approaches
+        # Try different codec approaches
         try:
             fourcc = cv2.VideoWriter.fourcc(*self.cfg.fourcc)
-            os_version: Optional[tuple[str, int]] = get_os_version()
+            os_version: Optional[OSVersion] = OSVersion.get_os_version()
 
             if os_version is None:
                 raise RuntimeError("Failed to get OS version")  # not Windows/macOS/linux
 
-            print('OS version:', os_version[0], os_version[1])
-            if os_version[0] == "windows" and os_version[1] >= 7:  # MSMF supports H.264
+            print('OS version:', os_version)
+
+            if isinstance(os_version, WindowsVersion) and os_version.version_number >= 7:  # MSMF supports H.264
                 print("windows >= 7, using MSMF")
-                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_MSMF, fourcc, self.cfg.fps, self._target_size)
+                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_MSMF, fourcc, self.cfg.fps,
+                                               self._target_size)
+            elif isinstance(os_version, MacOSVersion) and os_version.version_number >= (10, 13, 0): # AVFoundation supports H.264
+                print("macOS >= 10.13, using AVFoundation")
+                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_AVFOUNDATION, fourcc, self.cfg.fps,
+                                               self._target_size)
             else:
                 self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, self._target_size)
 
@@ -226,7 +231,7 @@ class ScreenRecorder:
         print(f"Codec: {self.cfg.fourcc}, FPS: {self.cfg.fps}, Size: {self._target_size[0]}x{self._target_size[1]}")
 
         # Test write a dummy frame to verify the writer works
-        test_frame = np.zeros((self._target_size[1], self._target_size[0], 3), dtype=np.uint8) # height then width
+        test_frame = np.zeros((self._target_size[1], self._target_size[0], 3), dtype=np.uint8)  # height then width
         self._writer.write(test_frame)
         print("Test frame write attempted")
 
