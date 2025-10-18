@@ -3,8 +3,8 @@ import cv2
 import time
 import json
 import numpy as np
-from pixels_to_players.webcam.client import WebcamClient
-from pixels_to_players.webcam.processors import get_iris_center
+from .client import WebcamClient
+from .processors import get_iris_center
 
 DOT_RADIUS = 20
 IRIS_RADIUS = 5
