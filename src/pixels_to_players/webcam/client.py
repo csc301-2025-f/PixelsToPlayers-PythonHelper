@@ -15,7 +15,7 @@ FrameProcessor = Callable[[np.ndarray], np.ndarray]
 
 @dataclass
 class WebcamConfig:
-    device_index: int = 0
+    device_index: int = 0 # todo: scan for all available devices and let the user choose
     width: int = 640
     height: int = 480
     fps: int = 30
@@ -105,7 +105,7 @@ class WebcamClient:
 
         writer = cv2.VideoWriter(
             str(out_path),
-            cv2.VideoWriter_fourcc(*self.cfg.fourcc),
+            cv2.VideoWriter.fourcc(*self.cfg.fourcc),
             fps,
             (w, h),
         )

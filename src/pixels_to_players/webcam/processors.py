@@ -106,3 +106,25 @@ def draw_fps(frame: np.ndarray, fps: float) -> np.ndarray:
     cv2.putText(out, f"{fps:.1f} FPS", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA)
     return out
+
+def get_iris_center(frame: np.ndarray) -> tuple[float, float] | None:
+    """Return average iris center (x, y) in pixel coordinates, or None if not detected."""
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = _face_mesh.process(rgb)
+
+    if not results.multi_face_landmarks:
+        return None
+
+    h, w, _ = frame.shape
+    left_ids = [468, 469, 470, 471]
+    right_ids = [473, 474, 475, 476]
+
+    for face_landmarks in results.multi_face_landmarks:
+        lx = np.mean([face_landmarks.landmark[i].x for i in left_ids]) * w
+        ly = np.mean([face_landmarks.landmark[i].y for i in left_ids]) * h
+        rx = np.mean([face_landmarks.landmark[i].x for i in right_ids]) * w
+        ry = np.mean([face_landmarks.landmark[i].y for i in right_ids]) * h
+
+        cx = (lx + rx) / 2
+        cy = (ly + ry) / 2
+        return (cx, cy)

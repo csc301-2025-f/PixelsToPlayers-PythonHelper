@@ -8,6 +8,7 @@ from datetime import datetime
 from pixels_to_players.webcam import WebcamClient, WebcamConfig, processors as P
 from pixels_to_players.file_operations import FileManager, Logger
 from pixels_to_players.firebase import FirebaseClient
+from pixels_to_players.screen_recording import ScreenRecorder, ScreenRecordingConfig
 
 PROTOCOL = "PixelsToPlayers"
 
