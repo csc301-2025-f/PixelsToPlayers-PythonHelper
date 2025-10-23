@@ -35,93 +35,95 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import pyautogui
 import cv2
 import numpy as np
+import pyautogui
+from cv2.typing import Size
+
+from pixels_to_players.utils.os_version import *
 
 
 @dataclass
 class ScreenRecordingConfig:
     """
-    Configuration class for screen recording parameters.
-    
-    This dataclass holds all the configuration options needed to customize
-    the screen recording behavior, including resolution, frame rate, and
-    output settings.
-    
+    Configuration for screen recording.
+
+    Controls capture resolution, frame rate, preview window, codec, and output location.
+
     Attributes:
-        width (Optional[int]): Target video width in pixels. If None, uses full screen width.
-        height (Optional[int]): Target video height in pixels. If None, uses full screen height.
-        fps (int): Target frame rate for the recording. Default is 15 FPS.
-        show_preview (bool): Whether to show a live preview window during recording.
-        save_dir (Path): Directory where recorded videos will be saved.
-        fourcc (str): Video codec to use for encoding. Default is 'avc1' for MP4 (H.264) format.
-        enable_key_stop (bool): Whether to allow stopping recording with ESC or 'q' keys.
-            Disabled by default for gaming scenarios. Defaults to False.
-    
-    Example:
-        # High quality recording with preview
-        config = ScreenRecordingConfig(
-            width=1920,
-            height=1080,
-            fps=30,
-            show_preview=True,
-            fourcc="mp4v"
-        )
-        
-        # Low quality recording without preview
-        config = ScreenRecordingConfig(
-            width=640,
-            height=480,
-            fps=10,
-            show_preview=False
-        )
-        
-        # Gaming-friendly recording (no key stops)
-        config = ScreenRecordingConfig(
-            show_preview=True,
-            enable_key_stop=False  # Won't stop on ESC or 'q'
-        )
+        res (Optional[Size]): Desired capture resolution (width, height). If None, uses the
+            primary display size. Final resolution is capped by MAX_RES and forced to even
+            dimensions for codec compatibility.
+        MAX_RES (Size): Upper bound for the output resolution. Defaults to (1280, 720).
+        fps (int): Target frames per second for capture and encoding. Default: 15.
+        show_preview (bool): If True, shows a small live preview window during recording.
+            Note: The preview processes UI events via cv2.waitKey to keep the window responsive.
+        save_dir (Path): Directory where output videos are saved. Created if missing.
+        fourcc (str): FourCC codec string (e.g., 'H264', 'mp4v', 'MJPG'). Default: 'H264'.
+            The recorder attempts platform-specific backends (MSMF on Windows, AVFoundation on macOS)
+            for H.264 when available, with an internal fallback if initialization fails.
+        enable_key_stop (bool): If True, allows stopping with ESC or 'q' when preview is enabled.
+            Default: False (use programmatic stop for uninterrupted sessions).
+
+    Examples:
+        # High quality previewed recording (attempt H.264)
+        config = ScreenRecordingConfig(res=(1920, 1080), fps=30, show_preview=True, fourcc="H264")
+
+        # Lightweight recording without preview (resolution capped by MAX_RES)
+        config = ScreenRecordingConfig(fps=10, show_preview=False)
+
+        # Gaming-friendly: preview on, but no accidental key-stop
+        config = ScreenRecordingConfig(show_preview=True, enable_key_stop=False)
     """
-    width: Optional[int] = None  # None → use full screen width
-    height: Optional[int] = None # None → use full screen height
-    fps: int = 15                # target frame rate
-    show_preview: bool = False   # show live preview window
+    res: Optional[Size] = None
+    MAX_RES: Size = (1280, 720)
+
+    fps: int = 15  # target frame rate
+    show_preview: bool = False  # show live preview window
     save_dir: Path = Path(__file__).parent / "recordings"
-    fourcc: str = "avc1"         # video codec
-    enable_key_stop: bool = False # allow stopping with ESC or 'q' keys
+    fourcc: str = 'H264'  # video codec H.264
+    enable_key_stop: bool = False  # allow stopping with ESC or 'q' keys
+    _target_size: Size = None, None
 
 
 class ScreenRecorder:
     """
-    Main class for recording screen content to video files.
-    
-    The ScreenRecorder class provides a simple interface for capturing screen
-    content and saving it as a video file. It supports configurable resolution,
-    frame rate, and output format.
-    
-    The recorder uses pyautogui for screen capture and OpenCV for video encoding,
-    providing a cross-platform solution for screen recording functionality.
-    
+    Records the screen to a video file.
+
+    Features:
+    - Auto-detects screen size (or uses config.res), caps to MAX_RES, and enforces even dimensions.
+    - Attempts H.264 via platform-native backends (MSMF on Windows, AVFoundation on macOS),
+      with a safe fallback to a broadly supported codec if initialization fails.
+    - Time-based pacing to approximate the target FPS.
+    - Optional live preview window with optional key-based stop.
+
     Attributes:
-        cfg (ScreenRecordingConfig): Configuration object containing recording parameters.
-        _writer (Optional[cv2.VideoWriter]): OpenCV video writer instance.
-        _running (bool): Flag indicating if recording is currently active.
-        _frame_index (int): Current frame number being recorded.
-        video_path (Optional[Path]): Path to the output video file.
-        _window_name (str): Name of the preview window (if enabled).
-    
-    Example:
-        # Basic usage
+        cfg (ScreenRecordingConfig): Recording configuration.
+        video_path (Optional[Path]): Output video path after start().
+        _writer (Optional[cv2.VideoWriter]): Internal OpenCV writer.
+        _running (bool): Recording loop state.
+        _frame_index (int): Number of frames written in the current session.
+        _window_name (str): Preview window title.
+        _target_size (Size): Effective WxH used for encoding.
+
+    Typical usage:
+        # One-shot, 10 seconds
         recorder = ScreenRecorder()
-        video_path = recorder.record(duration_seconds=10.0)
-        
-        # Advanced usage with manual control
-        recorder = ScreenRecorder(ScreenRecordingConfig(fps=30, show_preview=True))
-        video_path = recorder.start()
+        path = recorder.record(duration_seconds=10.0)
+
+        # Manual control with custom config
+        recorder = ScreenRecorder(ScreenRecordingConfig(fps=30, show_preview=True, fourcc="H264"))
+        path = recorder.start()
         recorder.record_for(duration_seconds=5.0)
         recorder.stop()
     """
+    cfg: Optional[ScreenRecordingConfig]
+    _writer: Optional[cv2.VideoWriter]
+    _running: bool
+    _frame_index: int
+    video_path: Optional[Path]
+    _window_name: str
+    _target_size: Size
 
     def __init__(self, cfg: ScreenRecordingConfig | None = None) -> None:
         """
@@ -136,11 +138,12 @@ class ScreenRecorder:
         """
         self.cfg = cfg or ScreenRecordingConfig()
         self.cfg.save_dir.mkdir(parents=True, exist_ok=True)
-        self._writer: Optional[cv2.VideoWriter] = None
-        self._running: bool = False
-        self._frame_index: int = 0
-        self.video_path: Optional[Path] = None
-        self._window_name = "Screen Recording Preview"
+        self._writer = None
+        self._running = False
+        self._frame_index = 0
+        self.video_path = None
+        self._window_name = 'Screen Recording Preview'
+        self._target_size = 0, 0
 
     def start(self) -> Path:
         """
@@ -162,43 +165,62 @@ class ScreenRecorder:
             video_path = recorder.start()
             print(f"Recording to: {video_path}")
         """
-        screen_w, screen_h = pyautogui.size()
-        w = self.cfg.width or screen_w
-        h = self.cfg.height or screen_h
-        
+
+        (w, h) = self.cfg.res or pyautogui.size()
+
         # Use a smaller, more standard resolution for better compatibility
-        if w > 1280:
-            w = 1280
-        if h > 720:
-            h = 720
-            
         # Ensure dimensions are even numbers (required by some codecs)
-        w = w - (w % 2)
-        h = h - (h % 2)
+
+        if w <= 0 or h <= 0:
+            raise ValueError("Invalid screen resolution (Size)")
+
+        w, h = (min(w, self.cfg.MAX_RES[0]),
+                min(h, self.cfg.MAX_RES[1]))
+
+        w -= w % 2
+        h -= h % 2
+
+        self._target_size = w, h
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.video_path = self.cfg.save_dir / f"screen_{ts}.mp4"
 
         # Try different codec approaches
         try:
-            fourcc = cv2.VideoWriter_fourcc(*self.cfg.fourcc)
-            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h), True)
-        except:
+            fourcc = cv2.VideoWriter.fourcc(*self.cfg.fourcc)
+            os_version: Optional[OSVersion] = OSVersion.get_os_version()
+
+            if os_version is None:
+                raise RuntimeError("Failed to get OS version")  # not Windows/macOS/linux
+
+            print('OS version:', os_version)
+
+            if isinstance(os_version, WindowsVersion) and os_version.version_number >= 7:  # MSMF supports H.264
+                print("windows >= 7, using MSMF")
+                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_MSMF, fourcc, self.cfg.fps,
+                                               self._target_size)
+            elif isinstance(os_version, MacOSVersion) and os_version.version_number >= (10, 13, 0): # AVFoundation supports H.264
+                print("macOS >= 10.13, using AVFoundation")
+                self._writer = cv2.VideoWriter(str(self.video_path), cv2.CAP_AVFOUNDATION, fourcc, self.cfg.fps,
+                                               self._target_size)
+            else:
+                self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, self._target_size)
+
+        except Exception as e:
             # Fallback to a more basic approach
+            print(e)
             print("Primary codec failed, trying fallback...")
-            fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, (w, h), True)
+            fourcc = cv2.VideoWriter.fourcc(*'MJPG')
+            print(f"Using codec: {fourcc}")
+            self._writer = cv2.VideoWriter(str(self.video_path), fourcc, self.cfg.fps, self._target_size)
         if not self._writer.isOpened():
             raise RuntimeError(f"Failed to open video writer: {self.video_path}")
-        
-        print(f"Video writer initialized: {self.video_path}")
-        print(f"Codec: {self.cfg.fourcc}, FPS: {self.cfg.fps}, Size: {w}x{h}")
 
-        # Store target size to enforce consistent frame dimensions
-        self._target_size = (w, h)
-        
+        print(f"Video writer initialized: {self.video_path}")
+        print(f"Codec: {self.cfg.fourcc}, FPS: {self.cfg.fps}, Size: {self._target_size[0]}x{self._target_size[1]}")
+
         # Test write a dummy frame to verify the writer works
-        test_frame = np.zeros((h, w, 3), dtype=np.uint8)
+        test_frame = np.zeros((self._target_size[1], self._target_size[0], 3), dtype=np.uint8)  # height then width
         self._writer.write(test_frame)
         print("Test frame write attempted")
 
@@ -210,37 +232,39 @@ class ScreenRecorder:
     def record_for(self, duration_seconds: Optional[float] = None) -> None:
         """
         Record screen content for a specified duration.
-        
+
         This method captures screen frames at the configured frame rate and
         writes them to the video file. If the recording hasn't been started
         yet, it will automatically call start() first.
-        
+
         The method uses time-based pacing to maintain the target frame rate
         and includes optional preview window functionality.
-        
+
         Args:
             duration_seconds (Optional[float]): Duration to record in seconds.
                 If None, records indefinitely until stop() is called or key stop is triggered
                 (only if enable_key_stop is True in config).
                 Defaults to None.
-        
+
         Raises:
             RuntimeError: If the video writer is not properly initialized.
             KeyboardInterrupt: If recording is interrupted by user (ESC or 'q' key, only if enable_key_stop is True).
-        
+
         Example:
             # Record for 10 seconds
             recorder = ScreenRecorder()
             recorder.record_for(duration_seconds=10.0)
-            
+
             # Record indefinitely (until manually stopped)
             recorder.record_for()
         """
         if not self._running:
             self.start()
 
-        assert self._writer is not None
-        target_w, target_h = getattr(self, "_target_size", (None, None))
+        assert self._writer is not None, "writer is not initialized"
+
+        # should not happen because checked in start() and always runs after start
+        assert self._target_size[0] > 0 and self._target_size[1] > 0, "Target size is invalid"
 
         frame_interval = 1.0 / max(1, self.cfg.fps)
         next_frame_time = time.monotonic()
@@ -255,20 +279,18 @@ class ScreenRecorder:
                 # pace capture near target FPS
                 if now < next_frame_time:
                     time.sleep(max(0.0, next_frame_time - now))
-                    now = time.monotonic()
 
                 # capture screenshot (RGB)
                 screenshot = pyautogui.screenshot()
                 frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-                
+
                 # Ensure frame is the right size and format
                 # Note: We'll resize later if needed based on config
 
                 # Enforce exact frame size for VideoWriter
-                if target_w is not None and target_h is not None:
-                    src_h, src_w = frame.shape[0], frame.shape[1]
-                    if (src_w, src_h) != (target_w, target_h):
-                        frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                src_h, src_w = frame.shape[0], frame.shape[1]
+                if (src_w, src_h) != self._target_size:
+                    frame = cv2.resize(frame, self._target_size, interpolation=cv2.INTER_AREA)
 
                 # write frame to video
                 self._writer.write(frame)
@@ -297,21 +319,21 @@ class ScreenRecorder:
     def stop(self) -> None:
         """
         Stop the screen recording session.
-        
+
         This method safely stops the recording, releases the video writer,
         and cleans up any resources. It's safe to call multiple times.
-        
+
         The method will:
         - Stop the recording loop
         - Release the OpenCV video writer
         - Close the preview window (if enabled)
         - Reset internal state
-        
+
         Example:
             recorder = ScreenRecorder()
             recorder.start()
             recorder.record_for(duration_seconds=5.0)
-            recorder.stop()  # Clean shutdown
+            recorder.stop() # Clean shutdown
         """
         if not self._running:
             return
@@ -325,7 +347,7 @@ class ScreenRecorder:
             if self.video_path and self.video_path.exists():
                 file_size = self.video_path.stat().st_size
                 print(f"Final file size: {file_size} bytes")
-                
+
                 # Try to verify the video can be opened
                 test_cap = cv2.VideoCapture(str(self.video_path))
                 if test_cap.isOpened():
@@ -342,29 +364,29 @@ class ScreenRecorder:
     def record(self, duration_seconds: Optional[float] = None) -> Path:
         """
         Convenience method for one-shot recording.
-        
+
         This method combines start(), record_for(), and stop() into a single
         call for simple recording scenarios. It's the easiest way to record
         screen content without manual session management.
-        
+
         Args:
             duration_seconds (Optional[float]): Duration to record in seconds.
                 If None, records indefinitely until manually stopped.
                 Defaults to None.
-        
+
         Returns:
             Path: Path to the recorded video file.
-        
+
         Raises:
             RuntimeError: If video writer initialization fails.
             KeyboardInterrupt: If recording is interrupted by user.
-        
+
         Example:
             # Simple 10-second recording
             recorder = ScreenRecorder()
             video_path = recorder.record(duration_seconds=10.0)
             print(f"Video saved to: {video_path}")
-            
+
             # High-quality recording with custom config
             config = ScreenRecordingConfig(fps=30, width=1920, height=1080)
             recorder = ScreenRecorder(config)
