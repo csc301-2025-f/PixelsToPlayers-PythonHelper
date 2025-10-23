@@ -178,7 +178,7 @@ class ScreenRecorder:
                 min(h, self.cfg.MAX_RES[1]))
 
         w -= w % 2
-        h -= h & 2
+        h -= h % 2
 
         self._target_size = w, h
 
