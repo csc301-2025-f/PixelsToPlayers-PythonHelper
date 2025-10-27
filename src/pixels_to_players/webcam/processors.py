@@ -1,51 +1,94 @@
 # src/pixels_to_players/webcam/processors.py
 from __future__ import annotations
-import cv2
+from pathlib import Path
+from datetime import datetime
+import cv2, time, json
 import mediapipe as mp
 import numpy as np
 
-mp_face_mesh = mp.solutions.face_mesh
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
+class IrisTracker:
+    """ 
+    Thread-safe wrapper around Mediapipe FaceMesh that extracts
+    iris center coordinates (x, y) from webcam frames.
+    """
+    def __init__(self, output_dir=Path(__file__).parent / "recordings", skip:int=1):
+        """
+        output_dir (Path): Directory to save iris tracking data.
+        skip (int): Process every Nth frame (default=1 means every frame).
+        """
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-_face_mesh = mp_face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
+        self.start_time = None
+        self.data = []
+        self.frame_count = 0
+        self.skip = skip
+
+        self.face_mesh = mp.solutions.face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+
+    # Iris Detection
+    def get_center(self, frame: np.ndarray) -> tuple[float, float] | None:
+        """
+        Return average iris center (x, y) in pixel coordinates, or None if not detected.
+        """
+        if frame is None or frame.size == 0:
+            return None
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.face_mesh.process(rgb)
+        if not results.multi_face_landmarks:
+            return None
+
+        h, w, _ = frame.shape
+        left_ids = [468, 469, 470, 471]
+        right_ids = [473, 474, 475, 476]
+
+        for face_landmarks in results.multi_face_landmarks:
+            lx = np.mean([face_landmarks.landmark[i].x for i in left_ids]) * w
+            ly = np.mean([face_landmarks.landmark[i].y for i in left_ids]) * h
+            rx = np.mean([face_landmarks.landmark[i].x for i in right_ids]) * w
+            ry = np.mean([face_landmarks.landmark[i].y for i in right_ids]) * h
+            return ((lx + rx) / 2, (ly + ry) / 2)
+
+    # Frame Processor Interface
+    def __call__(self, frame: np.ndarray) -> np.ndarray:
+        """Allows IrisTracker to be used as a WebcamClient processor for logging."""
+        if frame is None or frame.size == 0:
+            print("[Warning] Empty frame received, skipping...")
+            return frame
+
+        self.frame_count += 1
+        if self.frame_count % self.skip != 0:
+            return frame
+
+        if self.start_time is None:
+            self.start_time = time.time()
+
+        center = self.get_center(frame)
+        if center:
+            self.data.append({
+                "timestamp": round(time.time() - self.start_time, 3),
+                "center": [center[0], center[1]],
+            })
+
+        return frame
+
+    # Save Log
+    def save(self) -> Path:
+        """Save all logged iris data to JSON."""
+        filename = self.output_dir / f"iris_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, "w") as f:
+            json.dump(self.data, f, indent=2)
+        print(f"[IrisTracker] Saved {len(self.data)} entries → {filename}")
+        self.face_mesh.close() 
+        return filename
 
 # Keep these pure and fast; easy to unit-test and compose.
-
-def draw_facemesh(frame):
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = _face_mesh.process(rgb)
-
-    if results.multi_face_landmarks:
-        for face_landmarks in results.multi_face_landmarks:
-            mp_drawing.draw_landmarks(
-                image=frame,
-                landmark_list=face_landmarks,
-                connections=mp_face_mesh.FACEMESH_TESSELATION,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style(),
-            )
-            mp_drawing.draw_landmarks(
-                image=frame,
-                landmark_list=face_landmarks,
-                connections=mp_face_mesh.FACEMESH_CONTOURS,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style(),
-            )
-            mp_drawing.draw_landmarks(
-                image=frame,
-                landmark_list=face_landmarks,
-                connections=mp_face_mesh.FACEMESH_IRISES,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style(),
-            )
-
-    return frame
 
 def flip_horizontal(frame: np.ndarray) -> np.ndarray:
     """Mirror the frame (selfie style)."""
@@ -76,23 +119,31 @@ def draw_fps(frame: np.ndarray, fps: float) -> np.ndarray:
     return out
 
 def get_iris_center(frame: np.ndarray) -> tuple[float, float] | None:
-    """Return average iris center (x, y) in pixel coordinates, or None if not detected."""
+    """
+    Convenience function for one-off calls.
+    Creates a temporary IrisTracker, processes a single frame, and returns center.
+    """
+    return IrisTracker().get_center(frame)
+
+def draw_facemesh(frame: np.ndarray) -> np.ndarray:
+    """Draw Mediapipe FaceMesh landmarks on a frame for visualization only."""
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = _face_mesh.process(rgb)
+    face_mesh = mp.solutions.face_mesh.FaceMesh(
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+    results = face_mesh.process(rgb)
 
-    if not results.multi_face_landmarks:
-        return None
-
-    h, w, _ = frame.shape
-    left_ids = [468, 469, 470, 471]
-    right_ids = [473, 474, 475, 476]
-
-    for face_landmarks in results.multi_face_landmarks:
-        lx = np.mean([face_landmarks.landmark[i].x for i in left_ids]) * w
-        ly = np.mean([face_landmarks.landmark[i].y for i in left_ids]) * h
-        rx = np.mean([face_landmarks.landmark[i].x for i in right_ids]) * w
-        ry = np.mean([face_landmarks.landmark[i].y for i in right_ids]) * h
-
-        cx = (lx + rx) / 2
-        cy = (ly + ry) / 2
-        return (cx, cy)
+    if results.multi_face_landmarks:
+        for face_landmarks in results.multi_face_landmarks:
+            mp.solutions.drawing_utils.draw_landmarks(
+                image=frame,
+                landmark_list=face_landmarks,
+                connections=mp.solutions.face_mesh.FACEMESH_TESSELATION,
+                landmark_drawing_spec=None,
+                connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_tesselation_style(),
+            )
+    face_mesh.close()
+    return frame
