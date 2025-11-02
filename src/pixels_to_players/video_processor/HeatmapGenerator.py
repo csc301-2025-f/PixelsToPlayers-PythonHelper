@@ -39,8 +39,8 @@ class GazeHeatmapGenerator:
                 })
         return segments
 
-    def create_heatmap(self, gaze_points):
-        """Generate a normalized heatmap from gaze points."""
+    def create_heatmap(self, gaze_points, alpha=0.3):
+        """Generate a heatmap from gaze points."""
         heatmap = np.zeros((self.video_height, self.video_width),
                            dtype=np.float32)
 
@@ -56,7 +56,12 @@ class GazeHeatmapGenerator:
         heatmap = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
         heatmap = heatmap.astype(np.uint8)
         heatmap_color = cv2.applyColorMap(heatmap, self.colormap)
-        return heatmap_color
+
+        # Create transparent overlay (alpha controls transparency)
+        transparent_heatmap = cv2.addWeighted(heatmap_color, alpha,
+                                              np.zeros_like(heatmap_color),
+                                              1 - alpha, 0)
+        return transparent_heatmap
 
     def generate_per_segment(self, gaze_data, segments, output_dir):
         """Generate a heatmap for each video segment."""
