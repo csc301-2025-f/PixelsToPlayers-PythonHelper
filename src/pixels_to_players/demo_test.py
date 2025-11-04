@@ -23,6 +23,7 @@ from typing import Optional, Tuple
 from webcam import WebcamClient, WebcamConfig, processors as P
 from screen_recording import ScreenRecorder, ScreenRecordingConfig
 from webcam.calibration import run_calibration, CALIB_POINTS
+from webcam.tracking import run_eye_tracking
 from file_operations import Logger
 
 
@@ -210,6 +211,26 @@ class PixelsToPlayersDemo:
             print(f"Calibration test failed: {e}")
             return False
     
+    def test_eye_tracking(self) -> bool:
+        """Test eye tracking functionality using calibration data."""
+        print("Running calibrateion before eye tracking is required")
+        print("-" * 40)
+        
+        if not self.calibration_data:
+            print("No calibration data available. Run calibration first.")
+            return False
+        
+        try:
+            print("Starting eye tracking...")
+            print("Press 'q' to quit")
+            run_eye_tracking()
+            print("Eye tracking test completed")
+            return True
+            
+        except Exception as e:
+            print(f"Eye tracking test failed: {e}")
+            return False
+    
     def test_screen_recording(self) -> bool:
         """Test screen recording functionality."""
         print("\nTesting Screen Recording")
@@ -308,11 +329,12 @@ class PixelsToPlayersDemo:
         print("\nPixelsToPlayers Demo Menu")
         print("=" * 30)
         print("1. Test Webcam (Face Mesh Detection)")
-        print("2. Test Gaze Tracking")
+        print("2. Test iris Tracking")
         print("3. Run Calibration")
-        print("4. Test Screen Recording")
-        print("5. Integrated Demo (Gaze + Screen Recording)")
-        print("6. Run All Tests")
+        print("4. Run eye-to-screen Tracking")
+        print("5. Test Screen Recording")
+        print("6. Integrated Demo (Gaze + Screen Recording)")
+        print("7. Run All Tests")
         print("0. Exit")
         print("-" * 30)
     
@@ -376,7 +398,7 @@ class PixelsToPlayersDemo:
             self.show_menu()
             
             try:
-                choice = input("\nEnter your choice (0-6): ").strip()
+                choice = input("\nEnter your choice (0-7): ").strip()
                 
                 if choice == "0":
                     print("Goodbye!")
@@ -388,13 +410,15 @@ class PixelsToPlayersDemo:
                 elif choice == "3":
                     self.test_calibration()
                 elif choice == "4":
-                    self.test_screen_recording()
+                    self.test_eye_tracking()
                 elif choice == "5":
-                    self.test_integrated_demo()
+                    self.test_screen_recording()
                 elif choice == "6":
+                    self.test_integrated_demo()
+                elif choice == "7":
                     self.run_all_tests()
                 else:
-                    print("Invalid choice. Please enter 0-6.")
+                    print("Invalid choice. Please enter 0-7.")
                 
                 input("\nPress Enter to continue...")
                 
