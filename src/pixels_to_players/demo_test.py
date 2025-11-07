@@ -331,7 +331,7 @@ class PixelsToPlayersDemo:
         print("\nPixelsToPlayers Demo Menu")
         print("=" * 30)
         print("1. Test Webcam (Face Mesh Detection)")
-        print("2. Test iris Tracking")
+        print("2. Test Iris Tracking")
         print("3. Run Calibration")
         print("4. Run eye-to-screen Tracking")
         print("5. Test Screen Recording")
