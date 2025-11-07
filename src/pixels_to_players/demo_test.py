@@ -23,6 +23,7 @@ from typing import Optional, Tuple
 from webcam import WebcamClient, WebcamConfig, processors as P
 from screen_recording import ScreenRecorder, ScreenRecordingConfig
 from webcam.calibration import run_calibration, CALIB_POINTS
+from webcam.tracking import run_eye_tracking
 from file_operations import Logger
 
 
@@ -153,61 +154,83 @@ class PixelsToPlayersDemo:
         
         try:
             print("Starting calibration process...")
-            print("You will see 5 calibration points. Look at each one for 2 seconds.")
+            print("You will see 5 calibration points. Click on each point while looking at the red circle.")
             print("Press 'q' during calibration to skip.")
             
+            run_calibration(2.0, "demo_recordings/demo_calibration_data.json")
+            print("Calibration completed")
             # Run calibration with shorter duration for demo
-            data = []
+            # data = []
             
-            with WebcamClient(self.demo_config["webcam"]) as cam:
-                width, height, _ = cam._actual_props()
+            # with WebcamClient(self.demo_config["webcam"]) as cam:
+            #     width, height, _ = cam._actual_props()
                 
-                for i, (normalized_x, normalized_y) in enumerate(CALIB_POINTS):
-                    print(f"Look at point {i+1}/5: ({normalized_x:.1f}, {normalized_y:.1f})")
-                    start = time.time()
-                    samples = []
+            #     for i, (normalized_x, normalized_y) in enumerate(CALIB_POINTS):
+            #         print(f"Look at point {i+1}/5: ({normalized_x:.1f}, {normalized_y:.1f})")
+            #         start = time.time()
+            #         samples = []
                     
-                    while time.time() - start < 2.0:  # 2 seconds per point for demo
-                        frame = cam.snapshot(processors=[P.flip_horizontal])
-                        iris_center = P.get_iris_center(frame)
+            #         while time.time() - start < 2.0:  # 2 seconds per point for demo
+            #             frame = cam.snapshot(processors=[P.flip_horizontal])
+            #             iris_center = P.get_iris_center(frame)
                         
-                        # Draw calibration dot
-                        x = int(normalized_x * width)
-                        y = int(normalized_y * height)
-                        cv2.circle(frame, (x, y), 20, (0, 0, 255), -1)
-                        cv2.putText(frame, f"Point {i+1}/5", (x-50, y-30), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            #             # Draw calibration dot
+            #             x = int(normalized_x * width)
+            #             y = int(normalized_y * height)
+            #             cv2.circle(frame, (x, y), 20, (0, 0, 255), -1)
+            #             cv2.putText(frame, f"Point {i+1}/5", (x-50, y-30), 
+            #                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                         
-                        if iris_center:
-                            samples.append(iris_center)
-                            cv2.circle(frame, (int(iris_center[0]), int(iris_center[1])), 5, (0, 255, 255), -1)
+            #             if iris_center:
+            #                 samples.append(iris_center)
+            #                 cv2.circle(frame, (int(iris_center[0]), int(iris_center[1])), 5, (0, 255, 255), -1)
                         
-                        cv2.imshow("Calibration", frame)
-                        if cv2.waitKey(1) & 0xFF == ord('q'):
-                            break
+            #             cv2.imshow("Calibration", frame)
+            #             if cv2.waitKey(1) & 0xFF == ord('q'):
+            #                 break
                     
-                    if samples:
-                        avg = np.mean(samples, axis=0).tolist()
-                        data.append({
-                            "screen_x": normalized_x,
-                            "screen_y": normalized_y,
-                            "eye_x": avg[0],
-                            "eye_y": avg[1]
-                        })
-                        print(f"Captured point {i+1}: ({normalized_x}, {normalized_y}) -> eye {avg}")
+            #         if samples:
+            #             avg = np.mean(samples, axis=0).tolist()
+            #             data.append({
+            #                 "screen_x": normalized_x,
+            #                 "screen_y": normalized_y,
+            #                 "eye_x": avg[0],
+            #                 "eye_y": avg[1]
+            #             })
+            #             print(f"Captured point {i+1}: ({normalized_x}, {normalized_y}) -> eye {avg}")
                 
-                cv2.destroyAllWindows()
+            #     cv2.destroyAllWindows()
             
-            if len(data) >= 3:  # Need at least 3 points for basic calibration
-                self.save_calibration_data(data)
-                print(f"Calibration completed with {len(data)} points")
-                return True
-            else:
-                print("Insufficient calibration points captured")
-                return False
+            # if len(data) >= 3:  # Need at least 3 points for basic calibration
+            #     self.save_calibration_data(data)
+            #     print(f"Calibration completed with {len(data)} points")
+            #     return True
+            # else:
+            #     print("Insufficient calibration points captured")
+            #     return False
                 
         except Exception as e:
             print(f"Calibration test failed: {e}")
+            return False
+    
+    def test_eye_tracking(self) -> bool:
+        """Test eye tracking functionality using calibration data."""
+        print("Running calibrateion before eye tracking is required")
+        print("-" * 40)
+        
+        if not self.calibration_data:
+            print("No calibration data available. Run calibration first.")
+            return False
+        
+        try:
+            print("Starting eye tracking...")
+            print("Press 'q' to quit")
+            run_eye_tracking()
+            print("Eye tracking test completed")
+            return True
+            
+        except Exception as e:
+            print(f"Eye tracking test failed: {e}")
             return False
     
     def test_screen_recording(self) -> bool:
@@ -308,11 +331,12 @@ class PixelsToPlayersDemo:
         print("\nPixelsToPlayers Demo Menu")
         print("=" * 30)
         print("1. Test Webcam (Face Mesh Detection)")
-        print("2. Test Gaze Tracking")
+        print("2. Test Iris Tracking")
         print("3. Run Calibration")
-        print("4. Test Screen Recording")
-        print("5. Integrated Demo (Gaze + Screen Recording)")
-        print("6. Run All Tests")
+        print("4. Run eye-to-screen Tracking")
+        print("5. Test Screen Recording")
+        print("6. Integrated Demo (Gaze + Screen Recording)")
+        print("7. Run All Tests")
         print("0. Exit")
         print("-" * 30)
     
@@ -376,7 +400,7 @@ class PixelsToPlayersDemo:
             self.show_menu()
             
             try:
-                choice = input("\nEnter your choice (0-6): ").strip()
+                choice = input("\nEnter your choice (0-7): ").strip()
                 
                 if choice == "0":
                     print("Goodbye!")
@@ -388,13 +412,15 @@ class PixelsToPlayersDemo:
                 elif choice == "3":
                     self.test_calibration()
                 elif choice == "4":
-                    self.test_screen_recording()
+                    self.test_eye_tracking()
                 elif choice == "5":
-                    self.test_integrated_demo()
+                    self.test_screen_recording()
                 elif choice == "6":
+                    self.test_integrated_demo()
+                elif choice == "7":
                     self.run_all_tests()
                 else:
-                    print("Invalid choice. Please enter 0-6.")
+                    print("Invalid choice. Please enter 0-7.")
                 
                 input("\nPress Enter to continue...")
                 
