@@ -28,16 +28,31 @@ def show_dot(frame: np.ndarray, screen_width: int, screen_height: int, normalize
 def run_calibration(duration_per_point=2.0, output_file="calibration_data.json"):
     """Show calibration points, record iris centers, and save averaged data."""
     data = []
+    clicked = [False]
+    click_pos = [None]
+
+    def on_mouse(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            click_pos[0] = (x, y)
+            clicked[0] = True
 
     with WebcamClient() as cam:
-        width, height, _ = cam._actual_props()
+        width, height = 640, 480  # fixed for calibration display
+        cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback("Calibration", on_mouse)
+        cv2.resizeWindow("Calibration", width, height)
+        cv2.moveWindow("Calibration", 0, 0)
+        cv2.setWindowProperty("Calibration", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+
 
         for (normalized_x, normalized_y) in CALIB_POINTS:
             print(f"Look at point ({normalized_x:.1f}, {normalized_y:.1f})")
-            start = time.time()
+            # start = time.time()
             samples = []
+            clicked[0] = False
 
-            while time.time() - start < duration_per_point:
+            while not clicked[0]:   # while time.time() - start < duration_per_point:
                 frame = cam.snapshot()
                 iris_center = get_iris_center(frame)
                 frame = show_dot(frame, width, height, normalized_x, normalized_y)

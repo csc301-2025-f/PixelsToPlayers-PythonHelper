@@ -154,58 +154,60 @@ class PixelsToPlayersDemo:
         
         try:
             print("Starting calibration process...")
-            print("You will see 5 calibration points. Look at each one for 2 seconds.")
+            print("You will see 5 calibration points. Click on each point while looking at the red circle.")
             print("Press 'q' during calibration to skip.")
             
+            run_calibration(2.0, "demo_recordings/demo_calibration_data.json")
+            print("Calibration completed")
             # Run calibration with shorter duration for demo
-            data = []
+            # data = []
             
-            with WebcamClient(self.demo_config["webcam"]) as cam:
-                width, height, _ = cam._actual_props()
+            # with WebcamClient(self.demo_config["webcam"]) as cam:
+            #     width, height, _ = cam._actual_props()
                 
-                for i, (normalized_x, normalized_y) in enumerate(CALIB_POINTS):
-                    print(f"Look at point {i+1}/5: ({normalized_x:.1f}, {normalized_y:.1f})")
-                    start = time.time()
-                    samples = []
+            #     for i, (normalized_x, normalized_y) in enumerate(CALIB_POINTS):
+            #         print(f"Look at point {i+1}/5: ({normalized_x:.1f}, {normalized_y:.1f})")
+            #         start = time.time()
+            #         samples = []
                     
-                    while time.time() - start < 2.0:  # 2 seconds per point for demo
-                        frame = cam.snapshot(processors=[P.flip_horizontal])
-                        iris_center = P.get_iris_center(frame)
+            #         while time.time() - start < 2.0:  # 2 seconds per point for demo
+            #             frame = cam.snapshot(processors=[P.flip_horizontal])
+            #             iris_center = P.get_iris_center(frame)
                         
-                        # Draw calibration dot
-                        x = int(normalized_x * width)
-                        y = int(normalized_y * height)
-                        cv2.circle(frame, (x, y), 20, (0, 0, 255), -1)
-                        cv2.putText(frame, f"Point {i+1}/5", (x-50, y-30), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            #             # Draw calibration dot
+            #             x = int(normalized_x * width)
+            #             y = int(normalized_y * height)
+            #             cv2.circle(frame, (x, y), 20, (0, 0, 255), -1)
+            #             cv2.putText(frame, f"Point {i+1}/5", (x-50, y-30), 
+            #                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                         
-                        if iris_center:
-                            samples.append(iris_center)
-                            cv2.circle(frame, (int(iris_center[0]), int(iris_center[1])), 5, (0, 255, 255), -1)
+            #             if iris_center:
+            #                 samples.append(iris_center)
+            #                 cv2.circle(frame, (int(iris_center[0]), int(iris_center[1])), 5, (0, 255, 255), -1)
                         
-                        cv2.imshow("Calibration", frame)
-                        if cv2.waitKey(1) & 0xFF == ord('q'):
-                            break
+            #             cv2.imshow("Calibration", frame)
+            #             if cv2.waitKey(1) & 0xFF == ord('q'):
+            #                 break
                     
-                    if samples:
-                        avg = np.mean(samples, axis=0).tolist()
-                        data.append({
-                            "screen_x": normalized_x,
-                            "screen_y": normalized_y,
-                            "eye_x": avg[0],
-                            "eye_y": avg[1]
-                        })
-                        print(f"Captured point {i+1}: ({normalized_x}, {normalized_y}) -> eye {avg}")
+            #         if samples:
+            #             avg = np.mean(samples, axis=0).tolist()
+            #             data.append({
+            #                 "screen_x": normalized_x,
+            #                 "screen_y": normalized_y,
+            #                 "eye_x": avg[0],
+            #                 "eye_y": avg[1]
+            #             })
+            #             print(f"Captured point {i+1}: ({normalized_x}, {normalized_y}) -> eye {avg}")
                 
-                cv2.destroyAllWindows()
+            #     cv2.destroyAllWindows()
             
-            if len(data) >= 3:  # Need at least 3 points for basic calibration
-                self.save_calibration_data(data)
-                print(f"Calibration completed with {len(data)} points")
-                return True
-            else:
-                print("Insufficient calibration points captured")
-                return False
+            # if len(data) >= 3:  # Need at least 3 points for basic calibration
+            #     self.save_calibration_data(data)
+            #     print(f"Calibration completed with {len(data)} points")
+            #     return True
+            # else:
+            #     print("Insufficient calibration points captured")
+            #     return False
                 
         except Exception as e:
             print(f"Calibration test failed: {e}")
