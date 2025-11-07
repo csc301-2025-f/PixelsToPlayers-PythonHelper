@@ -9,7 +9,8 @@ dependencies = [
     "poetry-core (>=2.0.0)",
     "opencv-python (<4.10)",
     "mediapipe (>=0.10.21,<0.11.0)",
-    "pyautogui (>=0.9.54,<1.0.0)"
+    "pyautogui (>=0.9.54,<1.0.0)",
+    "hdbscan (>=0.8.40,<0.9.0)"
 ]
 
 [project.scripts]
