@@ -182,18 +182,20 @@ class ScreenRecorder:
 
         self._target_size = w, h
 
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Use microseconds in timestamp to avoid collisions in rapid successive recordings
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         self.video_path = self.cfg.save_dir / f"screen_{ts}.mp4"
+
+        # Get OS version first - fail early if unknown OS
+        os_version: Optional[OSVersion] = OSVersion.get_os_version()
+        if os_version is None:
+            raise RuntimeError("Failed to get OS version")  # not Windows/macOS/linux
+
+        print('OS version:', os_version)
 
         # Try different codec approaches
         try:
             fourcc = cv2.VideoWriter.fourcc(*self.cfg.fourcc)
-            os_version: Optional[OSVersion] = OSVersion.get_os_version()
-
-            if os_version is None:
-                raise RuntimeError("Failed to get OS version")  # not Windows/macOS/linux
-
-            print('OS version:', os_version)
 
             if isinstance(os_version, WindowsVersion) and os_version.version_number >= 7:  # MSMF supports H.264
                 print("windows >= 7, using MSMF")
