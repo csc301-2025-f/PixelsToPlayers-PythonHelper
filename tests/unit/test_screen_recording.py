@@ -45,10 +45,19 @@ def mock_pyautogui():
         # Mock screen size
         mock.size.return_value = (1920, 1080)
         
-        # Mock screenshot to return a PIL Image-like object
-        mock_image = MagicMock(spec=Image.Image)
-        mock_image.__array__ = Mock(return_value=np.zeros((1080, 1920, 3), dtype=np.uint8))
-        mock.screenshot.return_value = mock_image
+        # Create a simple array-like object that np.array() can handle
+        class MockImage:
+            """Mock PIL Image that works with np.array()"""
+            def __init__(self, shape=(1080, 1920, 3)):
+                self._array = np.zeros(shape, dtype=np.uint8)
+            
+            def __array__(self, dtype=None):
+                if dtype is not None:
+                    return self._array.astype(dtype)
+                return self._array
+        
+        # Return new mock image on each call
+        mock.screenshot.side_effect = lambda: MockImage()
         
         yield mock
 
@@ -196,6 +205,10 @@ class TestBasicOperations:
         mock_os_version.return_value = WindowsVersion(10)
         recorder = ScreenRecorder(basic_config)
         recorder.start()
+        
+        # Create a dummy file so VideoCapture verification is triggered
+        recorder.video_path.touch()
+        recorder.video_path.write_bytes(b"dummy video data")
         
         # Act
         recorder.stop()
@@ -1020,7 +1033,9 @@ class TestPreviewWindow:
             show_preview=True,
         )
         recorder = ScreenRecorder(config)
-        mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 1.0]
+        # Provide enough time values for the loop to iterate several times
+        # Need values for: next_frame_time init, end_time calc, then loop iterations
+        mock_time.monotonic.side_effect = [0.0, 0.0] + [i * 0.01 for i in range(20)]
         
         # Act
         recorder.start()
@@ -1059,7 +1074,8 @@ class TestPreviewWindow:
             show_preview=True,
         )
         recorder = ScreenRecorder(config)
-        mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 1.0]
+        # Provide enough time values for the loop to iterate several times
+        mock_time.monotonic.side_effect = [0.0, 0.0] + [i * 0.01 for i in range(20)]
         
         # Act
         recorder.start()
@@ -1152,7 +1168,8 @@ class TestPreviewWindow:
             show_preview=True,
         )
         recorder = ScreenRecorder(config)
-        mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 1.0]
+        # Provide enough time values for the loop to iterate several times
+        mock_time.monotonic.side_effect = [0.0, 0.0] + [i * 0.01 for i in range(20)]
         
         # Act
         recorder.start()
@@ -1276,6 +1293,9 @@ class TestEdgeCases:
         
         # Act
         recorder.start()
+        # Create a dummy file so verification is attempted
+        recorder.video_path.touch()
+        recorder.video_path.write_bytes(b"dummy video data")
         recorder.stop()
         
         # Assert
@@ -1325,18 +1345,20 @@ class TestEdgeCases:
         mock_os_version.return_value = WindowsVersion(10)
         
         # Mock screenshot returning different size than target
-        mock_image = MagicMock(spec=Image.Image)
-        mock_image.__array__ = Mock(
-            return_value=np.zeros((1080, 1920, 3), dtype=np.uint8)
-        )
-        mock_pyautogui.screenshot.return_value = mock_image
+        class CustomMockImage:
+            def __array__(self, dtype=None):
+                arr = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                return arr.astype(dtype) if dtype is not None else arr
+        
+        mock_pyautogui.screenshot.return_value = CustomMockImage()
         
         config = ScreenRecordingConfig(
             save_dir=temp_output_dir,
             res=(800, 600),  # Different from screenshot size
         )
         recorder = ScreenRecorder(config)
-        mock_time.monotonic.side_effect = [0.0, 0.1, 0.2, 1.0]
+        # Provide enough time values for the loop to iterate several times
+        mock_time.monotonic.side_effect = [0.0, 0.0] + [i * 0.01 for i in range(20)]
         
         # Act
         recorder.start()
@@ -1381,11 +1403,13 @@ class TestEdgeCases:
             call_count[0] += 1
             if call_count[0] >= 5:
                 recorder._running = False
-            mock_image = MagicMock(spec=Image.Image)
-            mock_image.__array__ = Mock(
-                return_value=np.zeros((1080, 1920, 3), dtype=np.uint8)
-            )
-            return mock_image
+            
+            class CustomMockImage:
+                def __array__(self, dtype=None):
+                    arr = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                    return arr.astype(dtype) if dtype is not None else arr
+            
+            return CustomMockImage()
         
         mock_pyautogui.screenshot.side_effect = screenshot_side_effect
         
@@ -1531,11 +1555,13 @@ class TestResourceCleanup:
             call_count[0] += 1
             if call_count[0] >= 3:
                 raise Exception("Screenshot failed")
-            mock_image = MagicMock(spec=Image.Image)
-            mock_image.__array__ = Mock(
-                return_value=np.zeros((1080, 1920, 3), dtype=np.uint8)
-            )
-            return mock_image
+            
+            class CustomMockImage:
+                def __array__(self, dtype=None):
+                    arr = np.zeros((1080, 1920, 3), dtype=np.uint8)
+                    return arr.astype(dtype) if dtype is not None else arr
+            
+            return CustomMockImage()
         
         mock_pyautogui.screenshot.side_effect = screenshot_side_effect
         mock_time.monotonic.side_effect = [i * 0.1 for i in range(100)]
