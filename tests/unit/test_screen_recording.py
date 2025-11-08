@@ -1723,8 +1723,7 @@ class TestIntegration:
         mock_time.monotonic.side_effect = [i * 0.1 for i in range(50)]
         video_path1 = recorder.record(duration_seconds=0.2)
         
-        # Reset mocks for second recording
-        mock_cv2.VideoWriter.reset_mock()
+        # Reset time mock for second recording
         mock_time.monotonic.side_effect = [i * 0.1 for i in range(50)]
         
         # Act - Second recording
