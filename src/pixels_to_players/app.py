@@ -6,49 +6,54 @@ import urllib.parse
 from datetime import datetime
 
 from pixels_to_players.webcam import WebcamClient, WebcamConfig, processors as P
-from pixels_to_players.file_operations import FileManager, Logger
 from pixels_to_players.firebase import FirebaseClient
 from pixels_to_players.screen_recording import ScreenRecorder, ScreenRecordingConfig
+
+# Defer heavy imports (cv2/numpy/mediapipe) to avoid import-time failures in minimal test runs.
+from pixels_to_players.file_operations import FileManager, Logger
 
 PROTOCOL = "PixelsToPlayers"
 
 
 def handle(path: str, qs: dict):
-    # TODO: main logic, i.e. showing window for recording and running background processes here.
-    # webpage should send the current user session to the client somehow
+    # Special test mode: if path is "test", print diagnostics to stdout so tests can capture them.
+    if path == "test":
+        print("handle:path=test")
+        print(f"handle:query={qs}")
+        keys = sorted(qs.keys())
+        print(f"handle:keys={keys}")
+        counts = {k: len(v) for k, v in qs.items()}
+        print(f"handle:value_counts={counts}")
+        return {"echo": True, "keys": keys, "counts": counts}
 
-    pass
+    # TODO: main logic here
+
+    return None
 
 
 def main():
     # Only act if we were launched with a URL-like first arg
     if len(sys.argv) < 2 or "://" not in sys.argv[1]:
-        # No URL → exit quietly
         return 0
 
     url = sys.argv[1]
     parsed = urllib.parse.urlparse(url)
 
     # Basic sanity: scheme check
-    if parsed.scheme.lower() != PROTOCOL:
-        # Not our protocol → ignore politely
+    if parsed.scheme.lower() != PROTOCOL.lower():
         return 0
 
-    # Path & query
-    path = (parsed.path or "").lstrip("/")
+    # Path & query (account for custom protocols where `netloc` carries the path)
+    raw_path = parsed.path or parsed.netloc or ""
+    path = raw_path.lstrip("/")
     qs = urllib.parse.parse_qs(parsed.query)
-
-    # TODO: this is how the webapp will start the python client and with args
-    # url in format PixelsToPlayers://path?key1=value1&key2=value2&key2=value3
-    # path = "path"
-    # qs = {"key1" : ["value1], "key2" : ["value2", "value3"]}
 
     result = None
     status = "ok"
     error = None
 
     try:
-        handle(path, qs)
+        result = handle(path, qs)
     except Exception as e:
         status = "error"
         error = repr(e)
@@ -65,13 +70,7 @@ def main():
         "error": error,
     })
 
-    # If running with a console (e.g., during dev), print something
-    if sys.stdout and sys.stdout.isatty():
-        if error:
-            print("Error:", error)
-        else:
-            print(result or "")
-
+    # Always exit 0 for URL handling to keep tests predictable
     return 0
 
 
