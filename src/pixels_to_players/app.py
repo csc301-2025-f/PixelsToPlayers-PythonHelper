@@ -1,18 +1,36 @@
 # entry point to python app
 # handles url and calls other functions to start the main logic
 
+import os
 import sys
 import urllib.parse
 from datetime import datetime
+from pathlib import Path
 
-from pixels_to_players.webcam import WebcamClient, WebcamConfig, processors as P
-from pixels_to_players.firebase import FirebaseClient
-from pixels_to_players.screen_recording import ScreenRecorder, ScreenRecordingConfig
-
-# Defer heavy imports (cv2/numpy/mediapipe) to avoid import-time failures in minimal test runs.
+# Lightweight utilities stay at module import time.
 from pixels_to_players.file_operations import FileManager, Logger
 
 PROTOCOL = "PixelsToPlayers"
+
+
+def _add_bundle_dll_dirs() -> None:
+    """Ensure PyInstaller bundles expose mediapipe/cv2 DLLs on Windows."""
+    if not getattr(sys, "frozen", False):
+        return
+
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
+    candidates = [
+        base / "mediapipe" / "python",
+        base / "mediapipe",
+        base,
+    ]
+    for dll_dir in candidates:
+        if not dll_dir.exists():
+            continue
+        try:
+            os.add_dll_directory(str(dll_dir))
+        except AttributeError:
+            os.environ["PATH"] = f"{dll_dir}{os.pathsep}" + os.environ.get("PATH", "")
 
 
 def handle(path: str, qs: dict):
@@ -25,6 +43,12 @@ def handle(path: str, qs: dict):
         counts = {k: len(v) for k, v in qs.items()}
         print(f"handle:value_counts={counts}")
         return {"echo": True, "keys": keys, "counts": counts}
+
+    # Heavy dependencies are only imported when actual app logic runs.
+    _add_bundle_dll_dirs()
+    from pixels_to_players.webcam import WebcamClient, WebcamConfig, processors as P
+    from pixels_to_players.firebase import FirebaseClient
+    from pixels_to_players.screen_recording import ScreenRecorder, ScreenRecordingConfig
 
     # TODO: main logic here
 
