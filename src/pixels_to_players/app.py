@@ -7,14 +7,13 @@ import urllib.parse
 from datetime import datetime
 from pathlib import Path
 
-# Lightweight utilities stay at module import time.
 from pixels_to_players.file_operations import FileManager, Logger
 
 PROTOCOL = "PixelsToPlayers"
 
 
 def _add_bundle_dll_dirs() -> None:
-    """Ensure PyInstaller bundles expose mediapipe/cv2 DLLs on Windows."""
+    """Ensure PyInstaller bundles expose mediapipe/cv2 DLLs on Windows. Must be ran before imports. Windows specific."""
     if not getattr(sys, "frozen", False):
         return
 

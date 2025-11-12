@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package
+      Name="PixelsToPlayers"
+      Manufacturer="PixelsToPlayers"
+      Version="0.1.0"
+      Language="1033"
+      ProductCode="*"
+      UpgradeCode="{00000000-0000-0000-0000-000000000000}"
+      Scope="perUser"
+      Compressed="yes"
+      InstallerVersion="500">
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon.ico"
+          SourceFile="$(var.ProjectRoot)\\resources\\favicon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+    <Property Id="WIXUILICENSERTF" Value="$(var.ProjectRoot)\\platforms\\windows\\wix\\License.rtf" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLDIR" Name="Pixels To Players" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <ComponentGroup Id="AppComponents">
+      <Component Guid="*" Id="cmpPixelsToPlayers" Directory="INSTALLDIR">
+        <File Id="filePixelsToPlayersExe"
+              Source="$(var.ProjectRoot)\\platforms\\windows\\dist\\PixelsToPlayers\\PixelsToPlayers.exe"
+              KeyPath="yes" />
+
+        <Shortcut Id="DesktopShortcut"
+                  Directory="DesktopFolder"
+                  Name="PixelsToPlayers"
+                  Target="[INSTALLDIR]PixelsToPlayers.exe"
+                  WorkingDirectory="INSTALLDIR"
+                  Icon="AppIcon.ico" />
+
+        <RegistryValue Root="HKCU"
+                       Key="Software\\Classes\\PixelsToPlayers"
+                       Type="string"
+                       Value="URL:PixelsToPlayers Protocol" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\\Classes\\PixelsToPlayers"
+                       Name="URL Protocol"
+                       Type="string"
+                       Value="" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\\Classes\\PixelsToPlayers\\DefaultIcon"
+                       Type="string"
+                       Value="[INSTALLDIR]PixelsToPlayers.exe,0" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\\Classes\\PixelsToPlayers\\shell\\open\\command"
+                       Type="string"
+                       Value="&quot;[INSTALLDIR]PixelsToPlayers.exe&quot; &quot;%1&quot;" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\\PixelsToPlayers"
+                       Name="InstallLocation"
+                       Type="string"
+                       Value="[INSTALLDIR]" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="MainFeature"
+             Title="PixelsToPlayers"
+             Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" />
+  </Package>
+
+</Wix>

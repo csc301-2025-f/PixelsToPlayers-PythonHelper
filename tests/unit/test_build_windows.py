@@ -7,16 +7,22 @@ import sys
 import unittest
 from pathlib import Path
 
+from pixels_to_players.utils.os_version import OSVersion, WindowsVersion
+
 # Global variables
 
 project_root = Path(__file__).resolve().parents[2]
 """Repository root derived from the test file location."""
 
-exe = project_root / "dist" / "PixelsToPlayers" / "PixelsToPlayers.exe"
+exe = project_root / "platforms" / "windows" / "dist" / "PixelsToPlayers" / "PixelsToPlayers.exe"
 """Path to the built executable under test."""
 
-BUILD_SCRIPT = project_root / "build_exe.py"
+BUILD_SCRIPT = project_root / "platforms" / "windows" / "build_exe.py"
 """Path to the PyInstaller driver that creates the PixelsToPlayers executable."""
+
+os_version = OSVersion.get_os_version()
+IS_WINDOWS = isinstance(os_version, WindowsVersion)
+"""Flag to ensure Windows-only tests are skipped on other platforms."""
 
 def build_env() -> dict[str, str]:
     """Return a copy of the environment stripped of IDE-specific Python vars.
@@ -44,6 +50,32 @@ def build_command() -> list[str]:
     return [sys.executable, str(BUILD_SCRIPT)]
 
 
+def protocol_command(url: str) -> list[str]:
+    """
+    Build a command that launches the custom protocol using pwsh, powershell,
+    or finally cmd.exe (best-effort) if PowerShell is unavailable.
+    """
+    candidate = shutil.which("pwsh") or shutil.which("powershell")
+    if candidate:
+        ps_script = (
+            f"$url = '{url}'; "
+            "try { "
+            "  $proc = Start-Process $url -PassThru -ErrorAction Stop; "
+            "  if ($proc -is [System.Diagnostics.Process]) { Start-Sleep -Seconds 2 } "
+            "  exit 0 "
+            "} catch { "
+            "  Write-Error $_; "
+            "  exit 1 "
+            "}"
+        )
+        return [candidate, "-NoLogo", "-NonInteractive", "-Command", ps_script]
+
+    cmd = shutil.which("cmd") or "cmd"
+    # start "" <url> launches the handler; no reliable exit status, but detect start failure
+    return [cmd, "/c", "start", "", url]
+
+
+@unittest.skipUnless(IS_WINDOWS, "Windows-only build/tests")
 class TestExecutable(unittest.TestCase):
     """Integration tests that build the exe and exercise critical launch paths."""
 
@@ -107,6 +139,24 @@ class TestExecutable(unittest.TestCase):
         print(err)
         assert "OpenCV bindings requires \"numpy\" package" not in out + err, (
             f"Executable failed to load numpy/cv2.\nstdout={out!r}\nstderr={err!r}"
+        )
+
+    def test_protocol_launch(self): # should pass after installation
+        """Ensure the OS-level protocol launch works via PowerShell (pwsh)."""
+        url = "PixelsToPlayers://test?source=pwsh"
+        cmd = protocol_command(url)
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=build_env(),
+            cwd=project_root,
+            timeout=40,
+        )
+        stdout = proc.stdout.decode(errors="replace")
+        stderr = proc.stderr.decode(errors="replace")
+        assert proc.returncode == 0, (
+            f"Protocol launch failed via PowerShell.\ncmd={cmd}\nstdout={stdout}\nstderr={stderr}"
         )
 
 def suite() -> unittest.TestSuite:

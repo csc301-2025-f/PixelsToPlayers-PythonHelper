@@ -78,14 +78,16 @@ def ensure_pyinstaller(py_exe: Path) -> bool:
         return False
 
 def main() -> int:
-    project_root = Path(__file__).parent.resolve()
+    project_root = Path(__file__).resolve().parents[2]
+    windows_root = project_root / "platforms" / "windows"
+    dist_root = windows_root / "dist"
+    build_dir = windows_root / "build"
     py = resolve_python(project_root)
 
     if not ensure_pyinstaller(py):
         return 1
 
-    dist_dir = project_root / "dist" / APP_NAME
-    build_dir = project_root / "build"
+    dist_dir = dist_root / APP_NAME
     icon_path = project_root / "resources" / "favicon.ico"
     entry_point = project_root / "src" / "pixels_to_players" / "app.py"
 
@@ -107,6 +109,7 @@ def main() -> int:
         "--clean",
         "-y",  # remove output directory without confirmation if it still exists
     ]
+    args += ["--distpath", str(dist_root), "--workpath", str(build_dir)]
     for module in COLLECT_MODULES:
         args += ["--hidden-import", module, "--collect-all", module]
     for module in COLLECT_BIN_MODULES:
@@ -124,7 +127,7 @@ def main() -> int:
         print(f"Build failed with exit code {e.returncode}")
         return e.returncode
 
-    out = project_root / "dist" / APP_NAME
+    out = dist_dir
     exe = out / f"{APP_NAME}.exe"
     print(f"\nBuild complete. Output: {out}")
     if not exe.exists():
