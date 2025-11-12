@@ -2,3 +2,5 @@
 /PixelsToPlayers/webcam/__pycache__/
 /PixelsToPlayers/screen_recording/recordings/
 /PixelsToPlayers/webcam/recordings/
+/PixelsToPlayers/platforms/windows/build/
+/PixelsToPlayers/platforms/windows/dist/
